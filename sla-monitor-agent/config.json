@@ -1,0 +1,6 @@
+{
+  "agentId": "ILL-SITE-001",
+  "backendUrl": "http://localhost:8080/api/bandwidth",
+  "threshold": 100,
+  "intervalSeconds": 4
+}
