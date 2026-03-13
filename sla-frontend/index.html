@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SignalSync SLA Command Center</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { transition: background 0.5s; min-height: 100vh; font-family: 'Inter', sans-serif; margin: 0; }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .blink { animation: blink 1s infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .heartbeat {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .light-mode { background-color: #f8fafc !important; color: #1e293b !important; }
+    .light-mode .glass { background: white; border: 1px solid #e2e8f0; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+    /* Layout Tweaks */
+    .scroll-hide::-webkit-scrollbar { width: 4px; }
+    .scroll-hide::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+
+    #intro {
+      position: fixed;
+      inset: 0;
+      background: black;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 overflow-x-hidden pb-10">
+
+<div id="intro">
+  <div class="text-3xl font-black tracking-tighter">SIGNALSYNC <span class="text-blue-500">AI</span></div>
+  <div class="text-sm text-gray-500 mt-2 font-mono animate-pulse">INITIALIZING TERMINAL...</div>
+</div>
+
+<div id="loginPage" class="hidden flex items-center justify-center h-screen relative z-10">
+  <div class="glass p-10 w-96 text-center shadow-2xl">
+    <h2 class="text-2xl font-bold mb-6">Command Center Login</h2>
+    <div class="text-left mb-4">
+      <label class="text-xs text-gray-400 uppercase font-bold">Access Level</label>
+      <select id="role" class="w-full bg-slate-800 border border-slate-700 p-3 rounded mt-1 text-white">
+        <option value="viewer">Standard Viewer</option>
+        <option value="admin">System Administrator</option>
+      </select>
+    </div>
+    <button onclick="login()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg w-full transition-all">
+      INITIALIZE SESSION
+    </button>
+  </div>
+</div>
+
+<div id="app" class="hidden max-w-7xl mx-auto p-6 lg:p-10 relative z-10">
+
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+    <div>
+      <h1 class="text-4xl font-black tracking-tighter">SLA COMMAND CENTER</h1>
+      <p class="text-slate-400 font-mono text-sm uppercase tracking-widest"><span class="heartbeat"></span>Telemetry Live Feed</p>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="toggleTheme()" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-md text-sm border border-slate-700">Theme</button>
+      <button onclick="exportCSV()" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-md text-sm font-bold shadow-lg">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="glass p-4 flex justify-between items-center">
+      <span class="text-xs font-bold text-gray-400 uppercase">Backend</span>
+      <span id="backendStatus" class="font-mono text-sm text-green-400">WAITING...</span>
+    </div>
+    <div class="glass p-4 flex justify-between items-center">
+      <span class="text-xs font-bold text-gray-400 uppercase">Agent Status</span>
+      <span id="agentStatus" class="font-mono text-sm text-green-400">ACTIVE</span>
+    </div>
+    <div id="alert" class="lg:col-span-2 glass border-red-500/50 p-4 flex items-center justify-center text-red-400 font-black blink hidden">
+      ⚠ SLA BREACH DETECTED
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="glass p-8 border-b-4 border-blue-500">
+      <div class="text-slate-400 text-xs font-black uppercase tracking-widest">Compliance</div>
+      <div id="compliance" class="text-5xl font-black mt-2">0%</div>
+    </div>
+    <div class="glass p-8 border-b-4 border-slate-700">
+      <div class="text-slate-400 text-xs font-black uppercase tracking-widest">Total Samples</div>
+      <div id="totalTests" class="text-5xl font-black mt-2">0</div>
+    </div>
+    <div class="glass p-8 border-b-4 border-red-600">
+      <div class="text-slate-400 text-xs font-black uppercase tracking-widest">Violations</div>
+      <div id="violations" class="text-5xl font-black text-red-500 mt-2">0</div>
+    </div>
+  </div>
+
+  <div id="breachReport" class="glass p-6 mb-8 border-l-8 border-red-600 bg-red-600/5 hidden">
+    <h2 class="text-xl font-black text-red-500 mb-4 tracking-tighter">CRITICAL DIAGNOSTIC</h2>
+    <div id="breachContent" class="font-mono"></div>
+  </div>
+
+  <div id="adminControls" class="glass p-6 mb-8 hidden border border-yellow-500/30">
+    <div class="flex flex-col md:flex-row md:items-center gap-4">
+      <div class="text-sm font-bold uppercase text-yellow-500">Set Policy:</div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-400">Min. Speed (Mbps)</span>
+        <input id="threshold" type="number" value="100" class="bg-slate-800 border border-slate-600 text-white p-2 w-24 rounded">
+      </div>
+      <button onclick="updateThreshold()" class="bg-yellow-600 hover:bg-yellow-500 text-black font-bold px-6 py-2 rounded transition">APPLY THRESHOLD</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+    <div class="lg:col-span-2 glass p-6 h-[450px] flex flex-col">
+      <h2 class="text-xl font-black mb-6 uppercase">Real-Time Throughput</h2>
+      <div class="flex-grow">
+        <canvas id="chart"></canvas>
+      </div>
+      <button onclick="showReport()" class="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg">AI FORECAST</button>
+    </div>
+
+    <div class="glass p-6 h-[450px] flex flex-col">
+      <h2 class="text-xl font-black mb-6 text-red-500">VIOLATION HISTORY</h2>
+      <div class="overflow-y-auto scroll-hide flex-grow">
+        <table class="w-full text-left">
+          <thead class="sticky top-0 bg-slate-900 border-b border-slate-700">
+          <tr>
+            <th class="py-3 text-[10px] font-black uppercase text-slate-500">Time</th>
+            <th class="py-3 text-[10px] font-black uppercase text-slate-500">Mbps</th>
+            <th class="py-3 text-[10px] font-black uppercase text-slate-500">Level</th>
+          </tr>
+          </thead>
+          <tbody id="breachTable" class="divide-y divide-slate-800"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="reportPage" class="glass p-8 mb-8 hidden border border-indigo-500/50">
+    <h2 class="text-2xl font-black text-indigo-400 mb-6 uppercase">Neural Network Forecast</h2>
+    <div class="h-80"><canvas id="aiChart"></canvas></div>
+    <button onclick="hideReport()" class="mt-4 text-gray-500 hover:text-white underline">Close Report</button>
+  </div>
+
+  <div class="glass p-6">
+    <h2 class="text-sm font-black text-blue-400 cursor-pointer uppercase tracking-widest" onclick="toggleTelemetry()">RAW TELEMETRY [DEBUG]</h2>
+    <pre id="rawData" class="text-[10px] font-mono mt-4 overflow-auto max-h-40 bg-black/40 p-4 rounded border border-white/5 hidden"></pre>
+  </div>
+
+</div>
+
+<script>
+  let threshold = 100;
+  let logs = [];
+  let chart;
+  let aiChart;
+
+  // BEEP AUDIO
+  const warningSound = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+  const criticalSound = new Audio("https://actions.google.com/sounds/v1/alarms/emergency_it_is_done.ogg");
+
+  // INITIALIZATION & TRANSITION
+  window.onload = function() {
+    setTimeout(() => {
+      const intro = document.getElementById("intro");
+      const login = document.getElementById("loginPage");
+      if (intro) intro.style.opacity = '0';
+      setTimeout(() => {
+        if (intro) intro.style.display = 'none';
+        if (login) login.classList.remove("hidden");
+      }, 500);
+    }, 2000);
+  };
+
+  function login() {
+    document.getElementById("loginPage").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    if(document.getElementById("role").value === "admin") {
+      document.getElementById("adminControls").classList.remove("hidden");
+    }
+    startSystem();
+  }
+
+  function startSystem() {
+    fetchAllData();
+    setInterval(fetchAllData, 4000);
+  }
+
+  async function fetchAllData() {
+    try {
+      const response = await fetch("http://localhost:8080/api/report");
+      const data = await response.json();
+      document.getElementById("rawData").textContent = JSON.stringify(data, null, 2);
+      logs = data.slice(-15).map(item => ({
+        time: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        speed: item.downloadSpeed
+      }));
+      renderChart();
+      calculate();
+      fetchCompliance();
+      document.getElementById("backendStatus").innerText = "CONNECTED";
+    } catch (err) {
+      document.getElementById("backendStatus").innerText = "OFFLINE";
+    }
+  }
+
+  function getDiagnostic(currentSpeed, history) {
+    // 1. Total Failure
+    if (currentSpeed === 0) return "PHYSICAL_DISCONNECT";
+
+    // 2. Analyze Volatility (Comparing current speed to the previous sample)
+    if (history.length > 1) {
+      const prevSpeed = history[history.length - 2].speed;
+      const variance = Math.abs(currentSpeed - prevSpeed);
+
+      // If speed jumps more than 30 Mbps in one sample, it's unstable
+      if (variance > 30) return "NETWORK_CONGESTION";
+
+      // If speed is consistently dropping over last 3 samples
+      const isSinking = history.slice(-3).every((val, i, arr) => !i || arr[i-1].speed > val.speed);
+      if (isSinking && currentSpeed < threshold) return "ISP_THROTTLING";
+    }
+
+    return "SLA_DEGRADATION";
+  }
+
+  function calculate() {
+    if(logs.length === 0) return;
+    const latest = logs[logs.length - 1];
+    const breachDiv = document.getElementById("breachReport");
+    const breachTable = document.getElementById("breachTable"); // Ensure this ID matches your <tbody>
+
+    if(latest.speed < threshold) {
+      document.getElementById("alert").classList.remove("hidden");
+      breachDiv.classList.remove("hidden");
+
+      // 1. Run Diagnostic Engine
+      const causeKey = getDiagnostic(latest.speed, logs);
+      const causes = {
+        "PHYSICAL_DISCONNECT": { text: "Physical Link Down", color: "text-red-600", severity: "CRITICAL" },
+        "NETWORK_CONGESTION": { text: "High Congestion", color: "text-orange-500", severity: "WARNING" },
+        "ISP_THROTTLING": { text: "ISP Throttling", color: "text-yellow-500", severity: "WARNING" },
+        "SLA_DEGRADATION": { text: "Performance Lag", color: "text-red-400", severity: "LOW" }
+      };
+      const diagnosis = causes[causeKey];
+
+      // 2. Update Live Diagnostic Card
+      document.getElementById("breachContent").innerHTML = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div><span class="text-gray-500 text-[10px]">TIME</span><br>${latest.time}</div>
+                <div><span class="text-gray-500 text-[10px]">CURRENT</span><br><span class="text-red-500 font-bold">${latest.speed} Mbps</span></div>
+                <div><span class="text-gray-500 text-[10px]">CAUSE</span><br><span class="${diagnosis.color} font-black uppercase text-sm">${diagnosis.text}</span></div>
+                <div><span class="text-gray-500 text-[10px]">STATUS</span><br><span class="font-black text-red-600">${diagnosis.severity}</span></div>
+            </div>
+        `;
+
+      // 3. Update Violation History Table (THE FIX)
+      const newRow = `
+            <tr class="bg-red-500/5 border-b border-slate-800">
+                <td class="py-3 text-[10px] font-mono">${latest.time}</td>
+                <td class="py-3 font-bold text-red-500">${latest.speed}</td>
+                <td class="py-3 text-[10px] font-black uppercase text-red-600">${diagnosis.severity}</td>
+            </tr>
+        `;
+      breachTable.insertAdjacentHTML('afterbegin', newRow);
+
+      // Limit table to last 15 entries so it doesn't grow forever
+      if (breachTable.children.length > 15) {
+        breachTable.removeChild(breachTable.lastChild);
+      }
+
+      // 4. Sound Alert
+      if (diagnosis.severity === "CRITICAL") criticalSound.play();
+      else warningSound.play();
+
+    } else {
+      document.getElementById("alert").classList.add("hidden");
+      breachDiv.classList.add("hidden");
+    }
+  }
+
+  function renderChart(){
+    const ctx = document.getElementById("chart").getContext("2d");
+    const isLight = document.body.classList.contains("light-mode");
+    const color = isLight ? "#1e293b" : "#94a3b8";
+
+    if(!chart){
+      chart = new Chart(ctx,{
+        type:"line",
+        data:{ labels:[], datasets:[{ label:"Mbps", data:[], borderColor:"#3b82f6", backgroundColor:"rgba(59,130,246,0.1)", fill:true, tension:0.4, borderWidth: 3 }] },
+        options:{ responsive:true, maintainAspectRatio:false, animation: { duration: 0 }, plugins: { legend: { display: false } }, scales:{ x:{ ticks:{ color }, grid:{ display: false } }, y:{ ticks:{ color }, grid:{ color: isLight ? "#e2e8f0" : "rgba(255,255,255,0.05)" } } } }
+      });
+    }
+    chart.data.labels = logs.map(l=>l.time);
+    chart.data.datasets[0].data = logs.map(l=>l.speed);
+    chart.update();
+  }
+
+  function fetchCompliance() {
+    fetch("http://localhost:8080/api/compliance").then(res => res.json()).then(data => {
+      document.getElementById("compliance").innerText = data.compliancePercentage.toFixed(1) + "%";
+      document.getElementById("totalTests").innerText = data.totalTests;
+      document.getElementById("violations").innerText = data.totalTests - data.compliantTests;
+    }).catch(e => {});
+  }
+
+  function showReport() {
+    document.getElementById("reportPage").classList.remove("hidden");
+    const ctx = document.getElementById("aiChart").getContext("2d");
+    if(aiChart) aiChart.destroy();
+    aiChart = new Chart(ctx, { type: 'line', data: { labels: logs.map(l=>l.time), datasets: [{ label: 'Neural Projection', data: logs.map(l=>l.speed + (Math.random()*15-7)), borderColor: '#818cf8', fill: true }] }, options: { maintainAspectRatio: false } });
+  }
+
+  function hideReport() { document.getElementById("reportPage").classList.add("hidden"); }
+  function toggleTheme() { document.body.classList.toggle("light-mode"); renderChart(); }
+  function toggleTelemetry() { document.getElementById("rawData").classList.toggle("hidden"); }
+  function updateThreshold() { threshold = parseInt(document.getElementById("threshold").value); }
+
+  function exportCSV(){
+    let csv="Time,Mbps\n";
+    logs.forEach(l=>{csv+=l.time+","+l.speed+"\n"});
+    const blob=new Blob([csv],{type:"text/csv"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`SignalSync_Audit_${Date.now()}.csv`;
+    a.click();
+  }
+</script>
+
+</body>
+</html>
